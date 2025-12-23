@@ -1,247 +1,141 @@
-# 📚 AI Book Recommender
+# Book Finder 📚
 
-An intelligent book recommendation system powered by **Ollama**, **LanceDB**, and **FastAPI**. Describe your reading mood with a few words, and get personalized book recommendations using semantic search and LLM reasoning.
+Moteur de recherche de livres intelligent avec 43+ millions de livres issus d'OpenLibrary.
 
-## 🌟 Features
+## 🚀 Déploiement gratuit
 
-- **Semantic Search**: Uses vector embeddings to find books matching your description
-- **LLM-Powered**: Ollama's Llama3 model provides intelligent recommendations
-- **Fast Vector DB**: LanceDB for lightning-fast similarity search
-- **Beautiful UI**: Modern React frontend with custom gradient theme
-- **Simple API**: Clean FastAPI backend with two endpoints
+Votre projet est maintenant prêt pour le déploiement gratuit ! Trois options disponibles :
 
-## 🏗️ Architecture
+### 1. **Railway** (Recommandé) 🚂
+- **500h/mois gratuit** - Backend + Frontend + DB
+- Configuration automatique
+- `./deploy.sh` puis choisir option 1
 
-```
-User Input → FastAPI → LanceDB (Vector Search) → Ollama (LLM) → Book Recommendation
-```
+### 2. **Vercel + Supabase** ⚡
+- Frontend illimité + API Functions + PostgreSQL 500MB
+- `./deploy.sh` puis choisir option 2
 
-1. User describes their reading preferences with keywords
-2. Backend embeds the query using `nomic-embed-text`
-3. LanceDB finds top 5 similar books via vector search
-4. Llama3 analyzes candidates and picks the best match
-5. Returns: Book Title and Author Name
+### 3. **Render** 🎨
+- Services séparés Backend/Frontend
+- `./deploy.sh` puis choisir option 3
 
-## 📋 Prerequisites
+## 📊 Optimisation des données
 
-Before you begin, ensure you have:
-
-- **Python 3.8+**
-- **Node.js 18+** and npm
-- **Ollama** installed and running
-
-## 🚀 Setup Guide
-
-### Step 1: Install Ollama
-
-#### macOS
+Avant le déploiement, optimisez vos données :
 ```bash
-brew install ollama
+python optimize-data.py
+```
+Réduit le dataset pour respecter les limites gratuites (200k livres max).
+
+## 📁 Fichiers de déploiement créés
+
+- `Dockerfile` - Configuration Railway
+- `railway.json` - Config Railway
+- `vercel.json` - Config Vercel
+- `database_adapter.py` - Support PostgreSQL/DuckDB
+- `deploy.sh` - Script de déploiement interactif
+- `optimize-data.py` - Optimisation des données
+
+## Fonctionnalités
+
+- **Recherche par mots-clés** : système de tags intuitif (Espace/Entrée pour ajouter, Backspace pour supprimer)
+- **Multi-langues** : recherche dans 6 langues (FR, EN, ES, DE, IT, PT), sélection multiple possible
+- **Enrichissement IA** : les requêtes sont enrichies par Ollama/Llama3 pour de meilleurs résultats
+- **Interface Liquid Glass** : design moderne avec effets de verre transparent et distorsion SVG
+- **Détection automatique** : l'interface s'adapte à la langue du navigateur
+
+## Architecture
+
+```
+book-recommander/
+├── backend/
+│   ├── main.py                    # API FastAPI
+│   ├── large_scale_recommender.py # Moteur de recherche
+│   ├── books.duckdb               # Base indexée (7.3GB)
+│   ├── openlibrary_books.parquet  # Dataset brut (3.9GB)
+│   ├── generate_embeddings_safe.py # Génération embeddings
+│   └── merge_embeddings.py        # Création index FAISS
+├── frontend/
+│   ├── src/App.jsx                # Interface React
+│   └── src/index.css              # Styles Liquid Glass
+└── README.md
 ```
 
-#### Linux
+## Dataset
+
+- **Source** : OpenLibrary Data Dumps
+- **43,6 millions de livres** avec :
+  - Titre, auteurs, genres, mots-clés
+  - Notes moyennes et nombre d'avis
+  - Tier de popularité (popular, known, niche, obscure)
+  - Langue (code ISO)
+
+Les noms d'auteurs sont inclus dans les mots-clés (prénom et nom séparés) pour améliorer la recherche.
+
+## Recherche
+
+### Actuelle (SQL)
+- Recherche dans la vue `popular_books` (2.4M livres popular/known)
+- Opérateur AND entre les mots-clés
+- Fallback sur la table complète si peu de résultats
+- Temps de réponse : ~0.5-1s
+
+### En cours (Embeddings)
+- Modèle : `all-MiniLM-L6-v2`
+- 4.6M livres (tiers popular, known, niche)
+- Index FAISS pour recherche sémantique
+- Permettra des recherches plus flexibles ("livres comme 1984" → dystopie, surveillance, etc.)
+
+## Installation
+
+### Backend
 ```bash
-curl -fsSL https://ollama.com/install.sh | sh
-```
-
-#### Windows
-Download from [ollama.com](https://ollama.com)
-
-### Step 2: Pull Required Models
-
-```bash
-# Pull the embedding model (for vector search)
-ollama pull nomic-embed-text
-
-# Pull the LLM model (for recommendations)
-ollama pull llama3
-```
-
-### Step 3: Start Ollama Server
-
-```bash
-ollama serve
-```
-
-Keep this running in a separate terminal. It will run on **http://localhost:11434**
-
-### Step 4: Setup Backend
-
-```bash
-# Create virtual environment
-python -m venv .venv
-
-# Activate virtual environment
-# On macOS/Linux:
-source .venv/bin/activate
-# On Windows:
-# .venv\Scripts\activate
-
-# Install dependencies
+cd backend
 pip install -r requirements.txt
-
-# Initialize the database (first time only)
-python init_database.py
-
-# Start the FastAPI server
-uvicorn main:app --reload
+# Ollama pour l'enrichissement IA (optionnel)
+ollama pull llama3
+# Lancer l'API
+python main.py
 ```
 
-Backend will run on **http://localhost:8000**
-
-### Step 5: Setup Frontend
-
+### Frontend
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start development server
 npm run dev
 ```
 
-Frontend will run on **http://localhost:3000**
+## API
 
-## 🎯 Usage
-
-1. Open **http://localhost:3000** in your browser
-2. Type descriptive words (e.g., "mystery", "adventure", "historical")
-3. Press **space** after each word to add it as a tag
-4. Click **"Find Book"**
-5. Get your personalized recommendation with title and author!
-
-## 📁 Project Structure
-
-```
-.
-├── main.py                    # FastAPI backend
-├── llm_controls.py           # LLM and vector search logic
-├── init_database.py          # Database initialization script
-├── BooksDatasetClean.csv     # Book dataset
-├── requirements.txt          # Python dependencies
-├── book_vectors.lancedb/     # LanceDB vector database
-└── frontend/                 # React frontend
-    ├── src/
-    │   ├── App.jsx          # Main React component
-    │   ├── main.jsx         # React entry point
-    │   └── index.css        # Tailwind + custom styles
-    ├── package.json
-    ├── tailwind.config.js
-    └── vite.config.js
-```
-
-## 🔌 API Endpoints
-
-### POST `/recommend`
-Get a book recommendation based on your description.
-
-**Request:**
+### POST /recommend
 ```json
 {
-  "prompt": "mystery adventure historical",
-  "model": "llama3"
+  "prompt": "philosophie marx",
+  "language": "fre",      // ou "fre,eng" ou "all"
+  "use_llm": true
 }
 ```
 
-**Response:**
+Réponse :
 ```json
 {
-  "recommendation": "The Da Vinci Code - Dan Brown"
+  "recommendation": { ... },
+  "keywords_used": ["philosophie", "marx", "communisme"],
+  "candidates_count": 15,
+  "all_candidates": [ ... ],
+  "llm_used": true
 }
 ```
 
-### POST `/generate`
-Raw LLM generation endpoint.
+## Stack technique
 
-**Request:**
-```json
-{
-  "prompt": "Tell me about mystery novels",
-  "model": "llama3"
-}
-```
+- **Backend** : Python, FastAPI, DuckDB, Sentence-Transformers, FAISS
+- **Frontend** : React, Vite, Tailwind CSS
+- **IA** : Ollama (Llama3) pour l'enrichissement des requêtes
+- **Data** : OpenLibrary dumps (domaine public)
 
-### GET `/`
-API information and available endpoints.
+## Contraintes
 
-## 🛠️ Tech Stack
-
-### Backend
-- **FastAPI**: Modern Python web framework
-- **Ollama**: Local LLM inference
-- **LanceDB**: Vector database for embeddings
-- **Pandas**: Data manipulation
-
-### Frontend
-- **React 18**: UI library
-- **Vite**: Build tool
-- **Tailwind CSS**: Styling
-- **Inter & JetBrains Mono**: Typography
-
-## 📊 Dataset
-
-The book dataset includes:
-- **Title**: Book title
-- **Authors**: Book authors
-- **Description**: Book description
-- **Category**: Book category/genre
-- **Publisher**: Publishing house
-- **Price**: Book price
-- **Publish Date**: Publication date (month and year)
-
-## 🎨 Customization
-
-### Add More Books
-
-Edit `BooksDatasetClean.csv` and run:
-```bash
-python init_database.py
-```
-
-### Change LLM Model
-
-In `llm_controls.py`, replace `llama3` with any Ollama model:
-```python
-ollama.chat(model="mistral", ...)
-```
-
-### Modify Prompt
-
-Edit the `system_prompt` in `llm_controls.py` to change recommendation style.
-
-## 🐛 Troubleshooting
-
-### Ollama Connection Error
-- Ensure Ollama is running: `ollama serve`
-- Check if models are pulled: `ollama list`
-
-### Database Not Found
-- Run initialization: `python init_database.py`
-
-### Frontend Can't Connect to Backend
-- Verify backend is running on port 8000
-- Check proxy settings in `frontend/vite.config.js`
-
-### Port Already in Use
-```bash
-# Backend (change port)
-uvicorn main:app --reload --port 8001
-
-# Frontend (change in vite.config.js)
-```
-
-### Large CSV File
-If the CSV file is too large, the initialization might take time. The script shows progress every 10 books embedded.
-
-## 📝 License
-
-MIT
-
-## 🤝 Contributing
-
-Feel free to open issues or submit pull requests!
-
----
-
-**Built with ❤️ using Ollama, LanceDB, and React**
+- Budget : 0€ (APIs et données gratuites uniquement)
+- RAM : 16GB (génération embeddings optimisée par chunks)
+- GPU : Apple Silicon MPS (batch=128 optimal)
