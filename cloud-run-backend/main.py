@@ -1,17 +1,17 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 import pandas as pd
-import os
 import re
-from typing import List, Optional
+import os
 
-app = FastAPI(title="Book Finder API", description="API de recherche de livres français")
+app = FastAPI(title="Book Finder API - Cloud Run", description="56k+ livres français")
 
-# Configuration CORS pour permettre les requêtes depuis Vercel
+# Configuration CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En production, spécifier les domaines autorisés
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -38,7 +38,7 @@ def load_books_data():
         books_df['keywords'] = books_df['keywords'].fillna('')
         books_df['genres'] = books_df['genres'].fillna('')
         
-        print(f"✅ {len(books_df):,} livres français chargés en mémoire")
+        print(f"✅ {len(books_df):,} livres chargés en mémoire")
         return True
         
     except Exception as e:
@@ -46,8 +46,7 @@ def load_books_data():
         return False
 
 # Charger les données au démarrage
-if not load_books_data():
-    print("⚠️ Utilisation du mode démo")
+load_success = load_books_data()
 
 class RecommendRequest(BaseModel):
     prompt: str
@@ -140,7 +139,7 @@ def search_books_pandas(prompt: str, language: str = "fre", limit: int = 20):
     
     return books_list
 
-@app.post("/recommend")
+@app.post("/api/recommend")
 async def recommend(request: RecommendRequest):
     """Endpoint de recommandation avec 56k livres"""
     try:
@@ -159,7 +158,7 @@ async def recommend(request: RecommendRequest):
             "firestore_used": False,
             "demo_mode": False,
             "dataset_size": len(books_df) if books_df is not None else 0,
-            "platform": "Render + Pandas"
+            "platform": "Cloud Run + Pandas"
         }
         
         return response
@@ -167,19 +166,19 @@ async def recommend(request: RecommendRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/")
+@app.get("/api/")
 async def root():
     """Endpoint racine avec stats du dataset"""
     return {
         "status": "ready",
         "message": "Book Finder API - 56k livres français",
         "dataset_size": len(books_df) if books_df is not None else 0,
-        "platform": "Render",
+        "platform": "Google Cloud Run",
         "demo_mode": False,
         "data_loaded": books_df is not None
     }
 
-@app.get("/random-unknown")
+@app.get("/api/random-unknown")
 async def random_unknown(language: str = "fre"):
     """Livre aléatoire depuis les 56k livres"""
     global books_df
@@ -222,7 +221,7 @@ async def random_unknown(language: str = "fre"):
     except Exception as e:
         return {"book": None, "error": str(e)}
 
-@app.get("/stats")
+@app.get("/api/stats")
 async def stats():
     """Statistiques du dataset"""
     global books_df
@@ -245,15 +244,7 @@ async def stats():
     except Exception as e:
         return {"error": str(e)}
 
-@app.get("/health")
-async def health():
-    """Endpoint de santé pour Render"""
-    return {
-        "status": "healthy",
-        "books_loaded": books_df is not None and not books_df.empty
-    }
-
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)

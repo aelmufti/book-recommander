@@ -229,33 +229,12 @@ function App() {
     setUnknownBook(null)
     
     try {
-      // Version démo - livre aléatoire depuis la liste
-      const demoBooks = [
-        {
-          title: "Le Petit Prince",
-          authors: "Antoine de Saint-Exupéry",
-          genres: "Fiction, Jeunesse",
-          avg_rating: 4.5,
-          ratings_count: 50000,
-          popularity_tier: "popular",
-          language: "fre",
-          first_publish_date: 1943
-        },
-        {
-          title: "L'Étranger", 
-          authors: "Albert Camus",
-          genres: "Fiction, Philosophie",
-          avg_rating: 4.1,
-          ratings_count: 30000,
-          popularity_tier: "known",
-          language: "fre",
-          first_publish_date: 1942
-        }
-      ]
-      
-      const randomBook = demoBooks[Math.floor(Math.random() * demoBooks.length)]
-      setUnknownBook(randomBook)
-    } catch {
+      // Utiliser l'API pour les livres inconnus
+      const { getRandomUnknownBook } = await import('./BookDatabase.js')
+      const book = await getRandomUnknownBook(unknownLang)
+      setUnknownBook(book)
+    } catch (error) {
+      console.error('Erreur lors de la récupération du livre:', error)
       setUnknownBook(null)
     } finally {
       setUnknownLoading(false)
@@ -289,19 +268,35 @@ function App() {
     setResults(null)
 
     try {
-      const response = await fetch('/api/recommend', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: keywords.join(' '),
-          language: 'all',
-          use_llm: true
+      // Utiliser la recherche API avec le dataset complet
+      const { searchBooks } = await import('./BookDatabase.js')
+      const books = await searchBooks(keywords.join(' '), selectedLanguages.join(','))
+      
+      if (books.length > 0) {
+        setResults({
+          recommendation: `${books[0].title} - ${books[0].authors}`,
+          book: books[0],
+          keywords_used: keywords,
+          candidates_count: books.length,
+          all_candidates: books.slice(0, 10),
+          language: selectedLanguages.join(','),
+          llm_used: false,
+          semantic_used: false,
+          meilisearch_used: false,
+          firestore_used: false,
+          demo_mode: false,
+          dataset_size: books.length > 15 ? 56323 : 15, // Détection API vs local
+          platform: books.length > 15 ? "API + 56k livres" : "Local + 15 livres"
         })
-      })
-
-      const data = await response.json()
-      setResults(data)
-    } catch {
+      } else {
+        setResults({
+          candidates_count: 0,
+          all_candidates: [],
+          keywords_used: keywords
+        })
+      }
+    } catch (error) {
+      console.error('Erreur lors de la recherche:', error)
       setResults({ error: 'Erreur de connexion' })
     } finally {
       setLoading(false)
@@ -382,6 +377,7 @@ function App() {
               <div className="results-info">
                 🔑 {results.keywords_used?.slice(0, 4).join(', ')} · {results.candidates_count} {t.results}
                 {results.llm_used && ' · 🤖 AI'}
+                {results.platform && ` · ${results.platform}`}
               </div>
 
               {results.candidates_count === 0 && (

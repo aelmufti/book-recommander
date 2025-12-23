@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Permettre la lecture des livres à tous
+    match /books/{bookId} {
+      allow read: if true;
+      allow write: if false; // Pas d'écriture depuis le client
+    }
+  }
+}
