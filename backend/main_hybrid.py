@@ -35,6 +35,7 @@ app.add_middleware(
 books_df = None
 meilisearch_available = False
 ollama_available = False
+ollama_base_url = "http://localhost:11434"  # URL par défaut
 meilisearch_client = None
 meilisearch_index = None
 
@@ -72,14 +73,24 @@ def check_ollama():
     """Vérifier si Ollama est disponible"""
     global ollama_available
     
-    try:
-        r = requests.get("http://localhost:11434/api/tags", timeout=2)
-        if r.status_code == 200:
-            print("✅ Ollama available")
-            ollama_available = True
-            return True
-    except:
-        pass
+    # URLs à tester (local puis public)
+    ollama_urls = [
+        "http://localhost:11434/api/tags",  # Local
+        "https://gtk-rangers-nevertheless-majority.trycloudflare.com/api/tags"  # Public
+    ]
+    
+    for url in ollama_urls:
+        try:
+            r = requests.get(url, timeout=5)
+            if r.status_code == 200:
+                print(f"✅ Ollama available at: {url}")
+                ollama_available = True
+                # Stocker l'URL de base pour les requêtes
+                global ollama_base_url
+                ollama_base_url = url.replace('/api/tags', '')
+                return True
+        except:
+            continue
     
     print("⚠️ Ollama not available")
     ollama_available = False
@@ -111,7 +122,7 @@ EXEMPLES:
 JSON pour "{user_input}":"""
     
     try:
-        r = requests.post("http://localhost:11434/api/generate", json={
+        r = requests.post(f"{ollama_base_url}/api/generate", json={
             "model": "llama3.2",
             "prompt": prompt,
             "stream": False
