@@ -70,10 +70,23 @@ def check_meilisearch():
     return False
 
 def check_ollama():
-    """Vérifier si Ollama est disponible"""
+    """Vérifier si Ollama ou Groq est disponible"""
     global ollama_available
     
-    # URLs à tester (local puis public)
+    # Vérifier d'abord Groq API
+    groq_api_key = os.environ.get("GROQ_API_KEY")
+    if groq_api_key:
+        try:
+            headers = {"Authorization": f"Bearer {groq_api_key}"}
+            r = requests.get("https://api.groq.com/openai/v1/models", headers=headers, timeout=5)
+            if r.status_code == 200:
+                print("✅ Groq API available")
+                ollama_available = True
+                return True
+        except Exception as e:
+            print(f"⚠️ Groq API test failed: {e}")
+    
+    # URLs Ollama à tester (local puis public)
     ollama_urls = [
         "http://localhost:11434/api/tags",  # Local
         "https://gtk-rangers-nevertheless-majority.trycloudflare.com/api/tags"  # Public
@@ -96,7 +109,7 @@ def check_ollama():
             print(f"❌ Ollama test failed for {url}: {e}")
             continue
     
-    print("⚠️ Ollama not available")
+    print("⚠️ No LLM service available (Groq or Ollama)")
     ollama_available = False
     return False
 
@@ -126,6 +139,52 @@ EXEMPLES:
 JSON pour "{user_input}":"""
     
     try:
+        # Essayer d'abord Groq API (gratuit)
+        groq_api_key = os.environ.get("GROQ_API_KEY")
+        if groq_api_key:
+            headers = {
+                "Authorization": f"Bearer {groq_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "messages": [{"role": "user", "content": prompt}],
+                "model": "llama3-8b-8192",
+                "temperature": 0.1,
+                "max_tokens": 500
+            }
+            
+            r = requests.post("https://api.groq.com/openai/v1/chat/completions", 
+                            json=payload, headers=headers, timeout=10)
+            
+            if r.status_code == 200:
+                response = r.json()
+                content = response["choices"][0]["message"]["content"]
+                
+                # Extract JSON
+                match = re.search(r'\{.*\}', content, re.DOTALL)
+                if match:
+                    data = json.loads(match.group())
+                    
+                    # Build expanded query
+                    parts = [user_input]
+                    parts.extend(data.get("auteurs", [])[:3])
+                    parts.extend(data.get("oeuvres", [])[:2])
+                    parts.extend(data.get("mots_cles", [])[:4])
+                    
+                    expanded = " ".join(parts)
+                    
+                    print(f"🤖 Groq LLM enriched: {user_input} → {expanded[:100]}...")
+                    
+                    return {
+                        "original": user_input,
+                        "expanded": expanded,
+                        "auteurs": data.get("auteurs", []),
+                        "oeuvres": data.get("oeuvres", []),
+                        "mots_cles": data.get("mots_cles", [])
+                    }
+        
+        # Fallback vers Ollama local/tunnel
         r = requests.post(f"{ollama_base_url}/api/generate", json={
             "model": "llama3.2",
             "prompt": prompt,
@@ -147,7 +206,7 @@ JSON pour "{user_input}":"""
                 
                 expanded = " ".join(parts)
                 
-                print(f"🤖 LLM enriched: {user_input} → {expanded[:100]}...")
+                print(f"🤖 Ollama LLM enriched: {user_input} → {expanded[:100]}...")
                 
                 return {
                     "original": user_input,
