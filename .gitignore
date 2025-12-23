@@ -48,7 +48,7 @@ backend/meilisearch_data/
 
 # Large parquet files
 backend/openlibrary_books.parquet
-backend/books_french.parquet
+# backend/books_french.parquet  # Commenté pour permettre le déploiement
 .vercel
 # Vercel
 .vercel
