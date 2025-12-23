@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+requests
+pydantic
+pandas
+duckdb
+ollama
+pyarrow
+psycopg2-binary
+sqlalchemy
