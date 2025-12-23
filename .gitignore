@@ -49,3 +49,6 @@ backend/meilisearch_data/
 # Large parquet files
 backend/openlibrary_books.parquet
 backend/books_french.parquet
+.vercel
+# Vercel
+.vercel
