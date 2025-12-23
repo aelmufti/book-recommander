@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pandas as pd
+import numpy as np
 import os
 import re
 from typing import Optional
@@ -69,15 +70,33 @@ class SearchRequest(BaseModel):
     use_llm: Optional[bool] = False
 
 def search_in_dataset(query: str, language: str = "fre", max_results: int = 20):
-    """Recherche dans le dataset avec pandas"""
+    """Recherche améliorée dans le dataset avec pandas"""
     global books_df
     
     if books_df is None or books_df.empty:
         return []
     
-    # Préparation de la requête
+    # Préparation de la requête avec synonymes et variations
     query_clean = re.sub(r'[^\w\s]', ' ', query.lower())
     terms = [term.strip() for term in query_clean.split() if len(term.strip()) > 2]
+    
+    # Enrichissement basique des termes de recherche
+    enriched_terms = []
+    for term in terms:
+        enriched_terms.append(term)
+        # Ajout de variations communes
+        if term in ['sf', 'science-fiction', 'sci-fi']:
+            enriched_terms.extend(['science', 'fiction', 'futur', 'espace'])
+        elif term in ['fantasy', 'fantastique']:
+            enriched_terms.extend(['magie', 'dragon', 'épée', 'quête'])
+        elif term in ['romance', 'amour']:
+            enriched_terms.extend(['amour', 'coeur', 'passion', 'relation'])
+        elif term in ['thriller', 'suspense']:
+            enriched_terms.extend(['mystère', 'enquête', 'crime', 'polar'])
+        elif term in ['histoire', 'historique']:
+            enriched_terms.extend(['guerre', 'époque', 'siècle', 'passé'])
+    
+    terms = list(set(enriched_terms))  # Supprimer les doublons
     
     if not terms:
         return []
@@ -91,25 +110,37 @@ def search_in_dataset(query: str, language: str = "fre", max_results: int = 20):
         else:
             df_work = df_work[df_work['language'] == language]
     
-    # Calcul des scores de pertinence
+    # Calcul des scores de pertinence amélioré
     scores = pd.Series(0, index=df_work.index)
     
     for term in terms:
-        # Score titre (x5)
+        # Score titre (x10 - plus important)
         title_match = df_work['title'].fillna('').str.lower().str.contains(term, regex=False)
-        scores += title_match * 5
+        scores += title_match * 10
         
-        # Score auteur (x3)
+        # Score auteur (x8 - très important)
         author_match = df_work['authors'].fillna('').str.lower().str.contains(term, regex=False)
-        scores += author_match * 3
+        scores += author_match * 8
         
-        # Score mots-clés (x2)
+        # Score mots-clés (x5 - important)
         keywords_match = df_work['keywords'].fillna('').str.lower().str.contains(term, regex=False)
-        scores += keywords_match * 2
+        scores += keywords_match * 5
         
-        # Score genres (x1)
+        # Score genres (x3 - modéré)
         genres_match = df_work['genres'].fillna('').str.lower().str.contains(term, regex=False)
-        scores += genres_match * 1
+        scores += genres_match * 3
+        
+        # Bonus pour correspondance exacte dans le titre
+        exact_title_match = df_work['title'].fillna('').str.lower().str.contains(f'\\b{term}\\b', regex=True)
+        scores += exact_title_match * 5
+    
+    # Bonus pour popularité (logarithmique)
+    popularity_bonus = np.log1p(df_work['ratings_count'].fillna(0)) * 0.5
+    scores += popularity_bonus
+    
+    # Bonus pour note élevée
+    rating_bonus = (df_work['avg_rating'].fillna(0) - 3.5) * 2
+    scores += rating_bonus.clip(lower=0)  # Seulement si note > 3.5
     
     # Sélection des résultats avec score > 0
     valid_indices = scores[scores > 0].index
@@ -121,10 +152,10 @@ def search_in_dataset(query: str, language: str = "fre", max_results: int = 20):
     results_df = df_work.loc[valid_indices].copy()
     results_df['relevance_score'] = scores[valid_indices]
     
-    # Tri par score puis par popularité
+    # Tri par score puis par popularité puis par note
     results_df = results_df.sort_values(
-        ['relevance_score', 'ratings_count'], 
-        ascending=[False, False]
+        ['relevance_score', 'ratings_count', 'avg_rating'], 
+        ascending=[False, False, False]
     )
     
     # Conversion en liste de dictionnaires
