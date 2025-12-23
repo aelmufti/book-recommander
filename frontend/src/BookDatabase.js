@@ -1,5 +1,5 @@
 // Configuration de l'API
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 // Base de données de livres de fallback (si l'API n'est pas disponible)
 export const DEMO_BOOKS = [
