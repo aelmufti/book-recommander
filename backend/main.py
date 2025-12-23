@@ -10,12 +10,7 @@ from pydantic import BaseModel
 import pandas as pd
 import os
 import re
-import requests
 from typing import Optional
-
-# URL du dataset hébergé (à remplacer par l'URL réelle)
-# TODO: Héberger books_french.parquet et mettre l'URL ici
-DATASET_URL = "https://github.com/aelmufti/book-finder-data/raw/main/books_french.parquet"
 
 # Configuration FastAPI
 app = FastAPI(
@@ -35,43 +30,19 @@ app.add_middleware(
 # Variable globale pour le dataset
 books_df = None
 
-def download_dataset():
-    """Télécharger le dataset depuis l'URL"""
-    dataset_path = "books_french.parquet"
-    
-    if os.path.exists(dataset_path):
-        print(f"📁 Dataset déjà présent: {dataset_path}")
-        return dataset_path
-    
-    try:
-        print(f"📥 Téléchargement du dataset depuis: {DATASET_URL}")
-        response = requests.get(DATASET_URL, stream=True)
-        response.raise_for_status()
-        
-        with open(dataset_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        
-        size = os.path.getsize(dataset_path) / 1024 / 1024
-        print(f"✅ Dataset téléchargé: {size:.1f} MB")
-        return dataset_path
-        
-    except Exception as e:
-        print(f"❌ Erreur téléchargement: {e}")
-        return None
-
 def load_dataset():
     """Charger le dataset de 56k livres français"""
     global books_df
     
     try:
-        # Télécharger le dataset si nécessaire
-        dataset_path = download_dataset()
-        if not dataset_path:
+        parquet_path = "books_french.parquet"
+        
+        if not os.path.exists(parquet_path):
+            print(f"❌ Fichier {parquet_path} introuvable")
             return False
         
-        print(f"📊 Chargement du dataset: {dataset_path}")
-        books_df = pd.read_parquet(dataset_path)
+        print(f"📊 Chargement du dataset: {parquet_path}")
+        books_df = pd.read_parquet(parquet_path)
         
         # Nettoyage des données
         books_df = books_df.dropna(subset=['title', 'authors'])
