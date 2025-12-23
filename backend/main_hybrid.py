@@ -81,7 +81,8 @@ def check_ollama():
     
     for url in ollama_urls:
         try:
-            r = requests.get(url, timeout=5)
+            print(f"🔍 Testing Ollama at: {url}")
+            r = requests.get(url, timeout=15)  # Timeout plus long
             if r.status_code == 200:
                 print(f"✅ Ollama available at: {url}")
                 ollama_available = True
@@ -89,7 +90,10 @@ def check_ollama():
                 global ollama_base_url
                 ollama_base_url = url.replace('/api/tags', '')
                 return True
-        except:
+            else:
+                print(f"❌ Ollama responded with status {r.status_code}")
+        except Exception as e:
+            print(f"❌ Ollama test failed for {url}: {e}")
             continue
     
     print("⚠️ Ollama not available")
@@ -589,6 +593,43 @@ async def dataset_stats():
         return stats_data
     except Exception as e:
         return {"error": str(e)}
+
+@app.get("/debug/ollama")
+async def debug_ollama():
+    """Debug de la connexion Ollama"""
+    debug_info = {
+        "ollama_available": ollama_available,
+        "ollama_base_url": ollama_base_url if 'ollama_base_url' in globals() else "Not set",
+        "test_results": []
+    }
+    
+    # Test des URLs
+    test_urls = [
+        "http://localhost:11434/api/tags",
+        "https://gtk-rangers-nevertheless-majority.trycloudflare.com/api/tags"
+    ]
+    
+    for url in test_urls:
+        try:
+            import time
+            start_time = time.time()
+            r = requests.get(url, timeout=20)
+            duration = time.time() - start_time
+            
+            debug_info["test_results"].append({
+                "url": url,
+                "status": "success" if r.status_code == 200 else f"error_{r.status_code}",
+                "duration_ms": int(duration * 1000),
+                "response_size": len(r.text) if r.text else 0
+            })
+        except Exception as e:
+            debug_info["test_results"].append({
+                "url": url,
+                "status": "failed",
+                "error": str(e)
+            })
+    
+    return debug_info
 
 @app.get("/health")
 async def health_check():
