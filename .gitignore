@@ -47,7 +47,6 @@ backend/meilisearch_data/
 
 # Large parquet files
 backend/openlibrary_books.parquet
-# backend/books_french.parquet  # Commenté pour permettre le déploiement
 !backend/books_25k.parquet  # Exception pour le dataset optimisé (25k livres)
 .vercel
 # Vercel
