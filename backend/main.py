@@ -15,7 +15,7 @@ from typing import Optional
 # Configuration FastAPI
 app = FastAPI(
     title="Book Finder API",
-    description="API de recherche dans 56k livres français",
+    description="API de recherche dans 25k livres français",
     version="2.0.0"
 )
 
@@ -31,11 +31,11 @@ app.add_middleware(
 books_df = None
 
 def load_dataset():
-    """Charger le dataset de 56k livres français"""
+    """Charger le dataset de 25k livres français"""
     global books_df
     
     try:
-        parquet_path = "books_french.parquet"
+        parquet_path = "books_25k.parquet"
         
         if not os.path.exists(parquet_path):
             print(f"❌ Fichier {parquet_path} introuvable")
@@ -151,7 +151,7 @@ async def api_info():
     """Informations sur l'API"""
     return {
         "status": "ready" if books_df is not None else "degraded",
-        "message": "Book Finder API - 56k livres français",
+        "message": "Book Finder API - 25k livres français",
         "dataset_size": len(books_df) if books_df is not None else 0,
         "platform": "Render + Pandas",
         "version": "2.0.0",

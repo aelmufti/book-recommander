@@ -17,8 +17,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Data files (keep only in backend/)
-*.parquet
+# Data files (keep only specific ones in backend/)
 *.csv
 *.pkl
 *.lancedb/
@@ -49,6 +48,7 @@ backend/meilisearch_data/
 # Large parquet files
 backend/openlibrary_books.parquet
 # backend/books_french.parquet  # Commenté pour permettre le déploiement
+!backend/books_25k.parquet  # Exception pour le dataset optimisé (25k livres)
 .vercel
 # Vercel
 .vercel
