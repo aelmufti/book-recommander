@@ -1,130 +1,136 @@
+#!/usr/bin/env python3
+"""
+Book Finder API - Version propre pour Render
+Utilise uniquement pandas + parquet (pas de DuckDB)
+"""
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import pandas as pd
 import os
 import re
-from typing import List, Optional
+from typing import Optional
 
-app = FastAPI(title="Book Finder API", description="API de recherche de livres français")
+# Configuration FastAPI
+app = FastAPI(
+    title="Book Finder API",
+    description="API de recherche dans 56k livres français",
+    version="2.0.0"
+)
 
-# Configuration CORS pour permettre les requêtes depuis Vercel
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En production, spécifier les domaines autorisés
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Chargement des données au démarrage
+# Variable globale pour le dataset
 books_df = None
 
-def load_books_data():
-    """Charger les 56k livres français depuis le parquet"""
+def load_dataset():
+    """Charger le dataset de 56k livres français"""
     global books_df
     
     try:
-        parquet_file = "books_french.parquet"
+        parquet_path = "books_french.parquet"
         
-        if not os.path.exists(parquet_file):
-            print(f"❌ Fichier {parquet_file} non trouvé")
+        if not os.path.exists(parquet_path):
+            print(f"❌ Fichier {parquet_path} introuvable")
             return False
         
-        print(f"📊 Chargement de {parquet_file}...")
-        books_df = pd.read_parquet(parquet_file)
+        print(f"📊 Chargement du dataset: {parquet_path}")
+        books_df = pd.read_parquet(parquet_path)
         
-        # Nettoyer les données
+        # Nettoyage des données
         books_df = books_df.dropna(subset=['title', 'authors'])
         books_df['keywords'] = books_df['keywords'].fillna('')
         books_df['genres'] = books_df['genres'].fillna('')
         
-        print(f"✅ {len(books_df):,} livres français chargés en mémoire")
+        print(f"✅ Dataset chargé: {len(books_df):,} livres")
         return True
         
     except Exception as e:
-        print(f"❌ Erreur lors du chargement : {e}")
+        print(f"❌ Erreur chargement dataset: {e}")
         return False
 
-# Charger les données au démarrage
-if not load_books_data():
-    print("⚠️ Utilisation du mode démo")
+# Charger le dataset au démarrage
+print("🚀 Initialisation de l'API Book Finder...")
+dataset_loaded = load_dataset()
 
-class RecommendRequest(BaseModel):
+if not dataset_loaded:
+    print("⚠️ Dataset non chargé - Mode dégradé")
+
+class SearchRequest(BaseModel):
     prompt: str
     language: Optional[str] = "fre"
     use_llm: Optional[bool] = False
 
-def search_books_pandas(prompt: str, language: str = "fre", limit: int = 20):
-    """Recherche dans les 56k livres avec pandas"""
+def search_in_dataset(query: str, language: str = "fre", max_results: int = 20):
+    """Recherche dans le dataset avec pandas"""
     global books_df
     
     if books_df is None or books_df.empty:
         return []
     
-    # Nettoyer et préparer la requête
-    prompt_clean = re.sub(r'[^\w\s]', ' ', prompt.lower())
-    keywords = [k.strip() for k in prompt_clean.split() if len(k.strip()) > 2]
+    # Préparation de la requête
+    query_clean = re.sub(r'[^\w\s]', ' ', query.lower())
+    terms = [term.strip() for term in query_clean.split() if len(term.strip()) > 2]
     
-    if not keywords:
+    if not terms:
         return []
     
-    # Filtrer par langue si spécifié
-    df_filtered = books_df.copy()
+    # Filtrage par langue
+    df_work = books_df.copy()
     if language and language != 'all':
         if ',' in language:
-            langs = [l.strip() for l in language.split(',')]
-            df_filtered = df_filtered[df_filtered['language'].isin(langs)]
+            languages = [lang.strip() for lang in language.split(',')]
+            df_work = df_work[df_work['language'].isin(languages)]
         else:
-            df_filtered = df_filtered[df_filtered['language'] == language]
+            df_work = df_work[df_work['language'] == language]
     
-    # Recherche vectorisée avec pandas
-    results = []
+    # Calcul des scores de pertinence
+    scores = pd.Series(0, index=df_work.index)
     
-    # Créer un texte de recherche pour chaque livre
-    search_texts = (
-        df_filtered['title'].fillna('').str.lower() + ' ' +
-        df_filtered['authors'].fillna('').str.lower() + ' ' +
-        df_filtered['keywords'].fillna('').str.lower() + ' ' +
-        df_filtered['genres'].fillna('').str.lower()
-    )
-    
-    # Calculer les scores pour chaque mot-clé
-    total_scores = pd.Series(0, index=df_filtered.index)
-    
-    for keyword in keywords:
-        # Bonus pour titre (x5)
-        title_matches = df_filtered['title'].fillna('').str.lower().str.contains(keyword, regex=False)
-        total_scores += title_matches * 5
+    for term in terms:
+        # Score titre (x5)
+        title_match = df_work['title'].fillna('').str.lower().str.contains(term, regex=False)
+        scores += title_match * 5
         
-        # Bonus pour auteur (x3)
-        author_matches = df_filtered['authors'].fillna('').str.lower().str.contains(keyword, regex=False)
-        total_scores += author_matches * 3
+        # Score auteur (x3)
+        author_match = df_work['authors'].fillna('').str.lower().str.contains(term, regex=False)
+        scores += author_match * 3
         
-        # Bonus pour mots-clés (x2)
-        keyword_matches = df_filtered['keywords'].fillna('').str.lower().str.contains(keyword, regex=False)
-        total_scores += keyword_matches * 2
+        # Score mots-clés (x2)
+        keywords_match = df_work['keywords'].fillna('').str.lower().str.contains(term, regex=False)
+        scores += keywords_match * 2
         
-        # Score normal pour genres (x1)
-        genre_matches = df_filtered['genres'].fillna('').str.lower().str.contains(keyword, regex=False)
-        total_scores += genre_matches * 1
+        # Score genres (x1)
+        genres_match = df_work['genres'].fillna('').str.lower().str.contains(term, regex=False)
+        scores += genres_match * 1
     
-    # Garder seulement les livres avec un score > 0
-    matching_indices = total_scores[total_scores > 0].index
+    # Sélection des résultats avec score > 0
+    valid_indices = scores[scores > 0].index
     
-    if len(matching_indices) == 0:
+    if len(valid_indices) == 0:
         return []
     
-    # Créer le DataFrame des résultats
-    results_df = df_filtered.loc[matching_indices].copy()
-    results_df['score'] = total_scores[matching_indices]
+    # Création du DataFrame de résultats
+    results_df = df_work.loc[valid_indices].copy()
+    results_df['relevance_score'] = scores[valid_indices]
     
-    # Trier par score puis par popularité
-    results_df = results_df.sort_values(['score', 'ratings_count'], ascending=[False, False])
+    # Tri par score puis par popularité
+    results_df = results_df.sort_values(
+        ['relevance_score', 'ratings_count'], 
+        ascending=[False, False]
+    )
     
-    # Convertir en liste de dictionnaires
+    # Conversion en liste de dictionnaires
     books_list = []
-    for _, book in results_df.head(limit).iterrows():
-        book_dict = {
+    for _, book in results_df.head(max_results).iterrows():
+        book_data = {
             'title': book['title'],
             'authors': book['authors'],
             'genres': book.get('genres', ''),
@@ -134,66 +140,70 @@ def search_books_pandas(prompt: str, language: str = "fre", limit: int = 20):
             'popularity_tier': book.get('popularity_tier', 'unknown'),
             'language': book.get('language', 'fre'),
             'first_publish_date': int(book.get('first_publish_date', 0)) if pd.notna(book.get('first_publish_date')) and str(book.get('first_publish_date')).isdigit() else None,
-            'score': int(book['score'])
+            'score': int(book['relevance_score'])
         }
-        books_list.append(book_dict)
+        books_list.append(book_data)
     
     return books_list
 
+@app.get("/")
+async def api_info():
+    """Informations sur l'API"""
+    return {
+        "status": "ready" if books_df is not None else "degraded",
+        "message": "Book Finder API - 56k livres français",
+        "dataset_size": len(books_df) if books_df is not None else 0,
+        "platform": "Render + Pandas",
+        "version": "2.0.0",
+        "data_loaded": books_df is not None
+    }
+
 @app.post("/recommend")
-async def recommend(request: RecommendRequest):
-    """Endpoint de recommandation avec 56k livres"""
+async def recommend_books(request: SearchRequest):
+    """Recherche et recommandation de livres"""
     try:
-        books = search_books_pandas(request.prompt, request.language)
+        if books_df is None:
+            raise HTTPException(status_code=503, detail="Dataset non disponible")
+        
+        results = search_in_dataset(request.prompt, request.language)
         
         response = {
-            "recommendation": f"{books[0]['title']} - {books[0]['authors']}" if books else None,
-            "book": books[0] if books else None,
-            "keywords_used": request.prompt.split() if request.prompt else [],
-            "candidates_count": len(books),
-            "all_candidates": books[:10],
+            "recommendation": f"{results[0]['title']} - {results[0]['authors']}" if results else None,
+            "book": results[0] if results else None,
+            "keywords_used": request.prompt.split(),
+            "candidates_count": len(results),
+            "all_candidates": results[:10],
             "language": request.language,
             "llm_used": False,
             "semantic_used": False,
             "meilisearch_used": False,
             "firestore_used": False,
             "demo_mode": False,
-            "dataset_size": len(books_df) if books_df is not None else 0,
-            "platform": "Render + Pandas"
+            "dataset_size": len(books_df),
+            "platform": "Render + Pandas v2.0"
         }
         
         return response
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/")
-async def root():
-    """Endpoint racine avec stats du dataset"""
-    return {
-        "status": "ready",
-        "message": "Book Finder API - 56k livres français",
-        "dataset_size": len(books_df) if books_df is not None else 0,
-        "platform": "Render",
-        "demo_mode": False,
-        "data_loaded": books_df is not None
-    }
+        print(f"❌ Erreur dans /recommend: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur de recherche: {str(e)}")
 
 @app.get("/random-unknown")
-async def random_unknown(language: str = "fre"):
-    """Livre aléatoire depuis les 56k livres"""
+async def get_random_book(language: str = "fre"):
+    """Livre aléatoire peu connu"""
     global books_df
     
     if books_df is None or books_df.empty:
         return {"book": None}
     
     try:
-        # Filtrer par langue
+        # Filtrage par langue
         df_filtered = books_df.copy()
         if language != 'all':
             df_filtered = df_filtered[df_filtered['language'] == language]
         
-        # Prendre les livres moins connus
+        # Sélection des livres peu connus
         unknown_books = df_filtered[
             df_filtered['popularity_tier'].isin(['unknown', 'obscure', 'niche']) |
             (df_filtered['ratings_count'] < 1000)
@@ -202,10 +212,10 @@ async def random_unknown(language: str = "fre"):
         if unknown_books.empty:
             unknown_books = df_filtered
         
-        # Sélectionner un livre aléatoire
+        # Livre aléatoire
         random_book = unknown_books.sample(n=1).iloc[0]
         
-        book_dict = {
+        book_data = {
             'title': random_book['title'],
             'authors': random_book['authors'],
             'genres': random_book.get('genres', ''),
@@ -217,40 +227,41 @@ async def random_unknown(language: str = "fre"):
             'first_publish_date': int(random_book.get('first_publish_date', 0)) if pd.notna(random_book.get('first_publish_date')) and str(random_book.get('first_publish_date')).isdigit() else None
         }
         
-        return {"book": book_dict}
+        return {"book": book_data}
         
     except Exception as e:
         return {"book": None, "error": str(e)}
 
 @app.get("/stats")
-async def stats():
+async def dataset_stats():
     """Statistiques du dataset"""
     global books_df
     
     if books_df is None:
-        return {"error": "Dataset not loaded"}
+        return {"error": "Dataset non chargé"}
     
     try:
-        stats = {
+        stats_data = {
             "total_books": len(books_df),
             "languages": books_df['language'].value_counts().to_dict(),
             "popularity_tiers": books_df['popularity_tier'].value_counts().to_dict(),
-            "avg_rating_distribution": {
+            "avg_rating_stats": {
                 "mean": float(books_df['avg_rating'].mean()) if books_df['avg_rating'].notna().any() else None,
                 "median": float(books_df['avg_rating'].median()) if books_df['avg_rating'].notna().any() else None
             },
             "top_authors": books_df['authors'].value_counts().head(10).to_dict()
         }
-        return stats
+        return stats_data
     except Exception as e:
         return {"error": str(e)}
 
 @app.get("/health")
-async def health():
-    """Endpoint de santé pour Render"""
+async def health_check():
+    """Vérification de santé"""
     return {
-        "status": "healthy",
-        "books_loaded": books_df is not None and not books_df.empty
+        "status": "healthy" if books_df is not None else "unhealthy",
+        "dataset_loaded": books_df is not None and not books_df.empty,
+        "dataset_size": len(books_df) if books_df is not None else 0
     }
 
 if __name__ == "__main__":
