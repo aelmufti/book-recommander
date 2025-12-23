@@ -1,0 +1,16 @@
+# Fichiers à ignorer lors du build Docker
+.git
+.gitignore
+README.md
+book-recommander.code-workspace
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+.pytest_cache
+.coverage
+.venv
+venv/
+.env
+.DS_Store
